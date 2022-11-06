@@ -26,19 +26,12 @@ from extra.onnx import get_run_onnx
 from tinygrad.tensor import Tensor
 from tinygrad.helpers import prod
 
-OPENPILOT_MODEL = "https://github.com/commaai/openpilot/raw/6c5693e965b9c63f8678f52b9e9b5abe35f23feb/selfdrive/modeld/models/supercombo.onnx"
+NAV_MODEL = "https://github.com/commaai/openpilot/raw/fc53dafd6ee027b6e0bc7cebe3f1eaa434c44e81/selfdrive/modeld/models/navmodel.onnx"
 
 np.random.seed(1337)
 def get_random_input_tensors(input_shapes):
   np_inputs = {
-    "input_imgs": np.random.randn(*(1, 12, 128, 256))*256,
-    "big_input_imgs": np.random.randn(*(1, 12, 128, 256))*256,
-    "desire": np.zeros((1,100, 8)),
-    "nav_features": np.zeros((1, 64)),
-    "traffic_convention": np.array([[1., 0.]]),
-    #"features_buffer": np.random.randn(*(1, 99, 128))
-    "features_buffer": np.random.randn(*input_shapes['features_buffer'])
-    #"initial_state": np.zeros((1, 768))
+    "input_img": np.random.randn(*(1, 1, 256, 256))*256,
   }
   if int(os.getenv("ZERO_OUT", "0")):
     np_inputs = {k:v*0 for k,v in np_inputs.items()}
@@ -121,49 +114,49 @@ def compile(dat, output_fn):
   CL.enqueue_copy(thneed_out, t.outputs[0], is_blocking=True)
   np.testing.assert_allclose(thneed_out, tinygrad_out.numpy())
 
-  # float32 only (fix this)
-  FLOAT16 = int(os.getenv("FLOAT16", 0))
-  if FLOAT16 == 0:
-    try:
-      from test.test_onnx import run_onnx_torch
-      torch_out = run_onnx_torch(onnx_model, np_inputs).numpy()
-      print(thneed_out, torch_out, "mse", np.sum((thneed_out-torch_out)**2), "max err", np.max(np.abs((thneed_out-torch_out))))
-      np.testing.assert_allclose(torch_out, thneed_out, atol=1e-4, rtol=1e-2)
-
-      # test loading/run thneed
-      _, new_np_inputs = get_random_input_tensors(input_shapes)
-      new_torch_out = run_onnx_torch(onnx_model, new_np_inputs).numpy()
-
-      # try old thneed with a different input
-      for k,v in t.inputs.items():
-        CL.enqueue_copy(v, new_np_inputs[k], is_blocking=True)
-
-      t.run()
-      old_thneed_out = np.empty((t.outputs[0].size//4,), dtype=np.float32).reshape(tinygrad_out.shape)
-      CL.enqueue_copy(old_thneed_out, t.outputs[0], is_blocking=True)
-
-      # compare thneed (rerun) with torch
-      np.testing.assert_allclose(new_torch_out, old_thneed_out, atol=1e-4, rtol=1e-2)
-
-      # load thneed and try that
-      _, new_np_inputs = get_random_input_tensors(input_shapes)
-      new_torch_out = run_onnx_torch(onnx_model, new_np_inputs).numpy()
-      nt = Thneed()
-      nt.load(output_fn)
-
-      # inputs
-      for k,v in nt.inputs.items():
-        CL.enqueue_copy(v, new_np_inputs[k], is_blocking=True)
-
-      nt.run()
-      new_thneed_out = np.empty((nt.outputs[0].size//4,), dtype=np.float32).reshape(tinygrad_out.shape)
-      CL.enqueue_copy(new_thneed_out, nt.outputs[0], is_blocking=True)
-
-      # compare torch to thneed
-      np.testing.assert_allclose(new_torch_out, new_thneed_out, atol=1e-4, rtol=1e-2)
-      print("thneed self-test passed!")
-    except ModuleNotFoundError:
-      pass
+  # # float32 only (fix this)
+  # FLOAT16 = int(os.getenv("FLOAT16", 0))
+  # if FLOAT16 == 0:
+  #   try:
+  #     from test.test_onnx import run_onnx_torch
+  #     torch_out = run_onnx_torch(onnx_model, np_inputs).numpy()
+  #     print(thneed_out, torch_out, "mse", np.sum((thneed_out-torch_out)**2), "max err", np.max(np.abs((thneed_out-torch_out))))
+  #     np.testing.assert_allclose(torch_out, thneed_out, atol=1e-4, rtol=1e-2)
+  #
+  #     # test loading/run thneed
+  #     _, new_np_inputs = get_random_input_tensors(input_shapes)
+  #     new_torch_out = run_onnx_torch(onnx_model, new_np_inputs).numpy()
+  #
+  #     # try old thneed with a different input
+  #     for k,v in t.inputs.items():
+  #       CL.enqueue_copy(v, new_np_inputs[k], is_blocking=True)
+  #
+  #     t.run()
+  #     old_thneed_out = np.empty((t.outputs[0].size//4,), dtype=np.float32).reshape(tinygrad_out.shape)
+  #     CL.enqueue_copy(old_thneed_out, t.outputs[0], is_blocking=True)
+  #
+  #     # compare thneed (rerun) with torch
+  #     np.testing.assert_allclose(new_torch_out, old_thneed_out, atol=1e-4, rtol=1e-2)
+  #
+  #     # load thneed and try that
+  #     _, new_np_inputs = get_random_input_tensors(input_shapes)
+  #     new_torch_out = run_onnx_torch(onnx_model, new_np_inputs).numpy()
+  #     nt = Thneed()
+  #     nt.load(output_fn)
+  #
+  #     # inputs
+  #     for k,v in nt.inputs.items():
+  #       CL.enqueue_copy(v, new_np_inputs[k], is_blocking=True)
+  #
+  #     nt.run()
+  #     new_thneed_out = np.empty((nt.outputs[0].size//4,), dtype=np.float32).reshape(tinygrad_out.shape)
+  #     CL.enqueue_copy(new_thneed_out, nt.outputs[0], is_blocking=True)
+  #
+  #     # compare torch to thneed
+  #     np.testing.assert_allclose(new_torch_out, new_thneed_out, atol=1e-4, rtol=1e-2)
+  #     print("thneed self-test passed!")
+  #   except ModuleNotFoundError:
+  #     pass
 
 
 
@@ -175,5 +168,5 @@ if __name__ == "__main__":
       dat = f.read()
     compile(dat, sys.argv[2])
   else:
-    dat = fetch(OPENPILOT_MODEL)
+    dat = fetch(NAV_MODEL)
     compile(dat, "/tmp/output.thneed")
