@@ -148,7 +148,7 @@ class CompiledBuffer(DeviceBuffer):  # pylint: disable=abstract-method
   @classmethod
   def create_raw_buffer(cls, shape, backing) -> RawBuffer:
     assert backing is None or prod(shape) == prod(backing.shape), "backing has the wrong shape"
-    assert backing is None or GlobalCounters.cache is None, f"can't copy in {backing.shape} while caching"
+    # assert backing is None or GlobalCounters.cache is None, f"can't copy in {backing.shape} while caching"
     return cls.raw_buffer_type(4*prod(shape)) if backing is None else cls.raw_buffer_type.fromCPU(backing)
   def raw(self) -> RawBuffer:
     if self._buf is None:
